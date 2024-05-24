@@ -1,0 +1,38 @@
+[build-system]
+requires = ["setuptools>=69.0"]
+build-backend = "setuptools.build_meta"
+
+[tool.setuptools]
+package-dir = { "" = "src" }
+
+[project]
+name = "app"
+version = "0.0.1"
+
+description = "FastApi template"
+requires-python = ">=3.12"
+classifiers = [
+    "Programming Language :: Python :: 3",
+    "License :: OSI Approved :: Apache Software License",
+    "Operating System :: OS Independent",
+]
+dependencies = [
+    "fastapi==0.111.*",
+    "uvicorn==0.29.*",
+    "SQLAlchemy==2.*",
+    "alembic==1.11.*",
+    "asyncpg",
+]
+[project.optional-dependencies]
+test = [
+    "pytest"
+]
+lint = [
+    "ruff",
+    "black",
+]
+
+
+[project.urls]
+"Homepage" = "https://github.com/honeymoond24/fastapi-template"
+"Bug Tracker" = "https://github.com/honeymoond24/fastapi-template"
