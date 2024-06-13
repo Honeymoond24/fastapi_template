@@ -23,10 +23,10 @@ class NewUser:
         self.database = database
         self.uow = uow
 
-    def __call__(
+    async def __call__(
             self, name: str,
     ) -> int:
         user = User(name=name)
         self.database.add_user(user)
-        self.uow.commit()
+        await self.uow.commit()
         return user.id

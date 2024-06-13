@@ -6,4 +6,4 @@ class Settings(BaseModel):
     DB_URI: PostgresDsn
 
 
-settings = Settings(**dotenv_values(".env"))
+settings = Settings(**dotenv_values(".env"))  # type: ignore

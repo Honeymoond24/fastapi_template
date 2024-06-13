@@ -4,13 +4,13 @@ RUN apt-get update && \
     apt-get install -y gcc libpq-dev && \
     apt clean && \
     rm -rf /var/cache/apt/*
-ENV PYTHONPATH=/app/src
 
 WORKDIR /app
 
+RUN mkdir ./src
+
+COPY ./pyproject.toml .
+RUN pip install uv
+RUN uv pip install -e . --system
+
 COPY . .
-RUN pip install -e .
-
-COPY src /app/src
-
-CMD ["uvicorn", "app.main:create_app", "--host", "0.0.0.0", "--port", "8000"]

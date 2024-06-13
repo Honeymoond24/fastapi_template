@@ -17,9 +17,10 @@ services:
       - .env
     healthcheck:
       test: [ "CMD-SHELL", "pg_isready -U postgres" ]
-      interval: 10s
+      interval: 2s
       timeout: 5s
-      retries: 5
+      retries: 10
+      start_period: 3s
     logging: &logging
       driver: json-file
       options:
@@ -47,6 +48,7 @@ services:
     build:
       context: .
       dockerfile: Dockerfile
+    command: uvicorn --factory app.main:create_app --host 0.0.0.0 --port 8000
     ports:
       - "${APP_EXTERNAL_PORT}:8000"
     expose:
@@ -54,16 +56,28 @@ services:
     env_file:
       - .env
     depends_on:
-      - db
+      - migration
     logging: *logging
 
   migration:
-    container_name: "${COMPOSE_PROJECT_NAME}_db_migration"
+    container_name: "${COMPOSE_PROJECT_NAME}_migration"
     build:
       context: .
-      dockerfile: Dockerfile.migration.dockerfile
+      dockerfile: Dockerfile
+    command: alembic upgrade head
     env_file:
       - .env
     depends_on:
-      - db
+      db:
+        condition: service_healthy
     logging: *logging
+
+#  tests:
+#    container_name: "${COMPOSE_PROJECT_NAME}_tests"
+#    build:
+#      context: .
+#      dockerfile: Dockerfile
+#    command: pytest
+#    env_file:
+#      - .env
+#    logging: *logging
