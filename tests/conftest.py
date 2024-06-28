@@ -1,10 +1,12 @@
 # pylint: disable=redefined-outer-name
 import asyncio
 from typing import Generator, AsyncGenerator
+from unittest.mock import Mock
 
 import async_timeout
 import pytest
 import pytest_asyncio
+from dishka import Provider, Scope, make_container, make_async_container
 from httpx import AsyncClient, ASGITransport
 from sqlalchemy.ext.asyncio import AsyncSession, create_async_engine, AsyncEngine, AsyncConnection, async_sessionmaker
 from sqlalchemy.orm import sessionmaker
@@ -12,6 +14,7 @@ from sqlalchemy.orm import sessionmaker
 from app.adapters.sqlalchemy_db.models import metadata_obj
 from app.config import settings
 from app.main import create_app
+from app.main.di import init_dependencies, setup_interactors
 
 
 async def wait_for_postgres_to_come_up(engine: AsyncEngine) -> AsyncConnection:
@@ -31,6 +34,8 @@ def postgres_async_engine() -> AsyncEngine:
 @pytest_asyncio.fixture(scope="session", autouse=True)
 async def postgres_create(postgres_async_engine: AsyncEngine) -> AsyncGenerator:
     await wait_for_postgres_to_come_up(postgres_async_engine)
+    async with postgres_async_engine.begin() as conn:
+        await conn.run_sync(metadata_obj.drop_all)
     async with postgres_async_engine.begin() as conn:
         await conn.run_sync(metadata_obj.create_all)
     yield
@@ -54,8 +59,20 @@ async def postgres_session(postgres_session_factory: async_sessionmaker):
 
 
 @pytest.fixture(scope="session")
-async def client():
+async def client() -> AsyncClient:
     # noinspection PyTypeChecker
     # TODO: should check this place with MyPy
     async with AsyncClient(transport=ASGITransport(app=create_app()), base_url="http://test") as async_client:
         yield async_client
+
+
+class FakeDBProvider(Provider):
+    """Fake DB provider for tests"""
+
+
+# @pytest.fixture
+# async def container():
+#     providers: list[Provider] = setup_interactors()
+#     c = make_async_container(*providers)
+#     async with c() as request_c:
+#         yield request_c

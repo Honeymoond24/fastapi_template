@@ -1,9 +1,10 @@
-from abc import ABC, abstractmethod
+from abc import abstractmethod
+from typing import Protocol
 
 from app.application.models import User
 
 
-class UoW(ABC):
+class UoW(Protocol):
     @abstractmethod
     async def commit(self):
         raise NotImplementedError
@@ -13,7 +14,7 @@ class UoW(ABC):
         raise NotImplementedError
 
 
-class DatabaseGateway(ABC):
+class DatabaseGateway(Protocol):
     @abstractmethod
     def add_user(self, user: User) -> None:
         raise NotImplementedError

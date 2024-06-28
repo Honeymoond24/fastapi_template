@@ -29,6 +29,3 @@ user = Table(
 
 def start_mappers():
     mapper_registry.map_imperatively(User, user)
-
-
-start_mappers()

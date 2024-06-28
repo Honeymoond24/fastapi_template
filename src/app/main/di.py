@@ -1,18 +1,16 @@
-from functools import partial
 from logging import getLogger
-from typing import AsyncGenerator, Any
+from typing import AsyncIterable
 
+from dishka import make_async_container, Provider, Scope, provide, AsyncContainer
+from dishka.integrations.fastapi import setup_dishka
 from fastapi import FastAPI, Depends
-from sqlalchemy.ext.asyncio import create_async_engine, async_sessionmaker, AsyncEngine, AsyncSession
-from sqlalchemy.orm import Session
+from sqlalchemy.ext.asyncio import async_sessionmaker, AsyncSession
 
 from app.adapters.sqlalchemy_db.gateway import SqlaGateway
-from app.adapters.sqlalchemy_db.models import start_mappers
-from app.api.depends_stub import Stub
-from app.application.models import User
+from app.adapters.sqlalchemy_db.provider import create_async_session_maker
 from app.application.protocols.database import DatabaseGateway, UoW
-from app.application.users import NewUser
-from app.config import settings
+from app.application.users import CreateUserInteractor
+from app.presentation.api.depends_stub import Stub
 
 logger = getLogger(__name__)
 
@@ -29,40 +27,71 @@ def all_depends(cls: type) -> None:
     )
 
 
-def new_gateway(session: Session = Depends(Stub(Session))):
-    yield SqlaGateway(session)
+def new_gateway(async_session: AsyncSession = Depends(Stub(AsyncSession))):
+    yield SqlaGateway(async_session)
 
 
-def new_uow(session: Session = Depends(Stub(Session))):
-    return session
+def new_uow(async_session: AsyncSession = Depends(Stub(AsyncSession))):
+    return async_session
 
 
-def create_async_session_maker() -> async_sessionmaker[AsyncSession]:
-    engine: AsyncEngine = create_async_engine(
-        str(settings.DB_URI),
-        echo=True,
-        pool_size=15,
-        max_overflow=15,
-        connect_args={
-            "timeout": 5,
-        },
-    )
-    return async_sessionmaker(engine, autoflush=False, expire_on_commit=False)
+async def new_async_session(async_session_maker: async_sessionmaker[AsyncSession]) -> AsyncSession:
+    async with async_session_maker() as async_session:
+        yield async_session
 
 
-async def new_session(session_maker: async_sessionmaker[AsyncSession]) -> AsyncGenerator[AsyncSession, Any]:
-    async with session_maker() as session:
-        yield session
+# def db_provider() -> Provider:
+#     provider = Provider()
+#
+#     provider.provide(get_engine, scope=Scope.APP)
+#     provider.provide(get_async_sessionmaker, scope=Scope.APP)
+#     provider.provide(get_async_session, scope=Scope.REQUEST)
+#
+#     return provider
+
+
+class DBProvider(Provider):
+    @provide(scope=Scope.REQUEST)
+    def get_async_session_maker(self) -> async_sessionmaker[AsyncSession]:
+        return create_async_session_maker()
+
+    @provide(scope=Scope.REQUEST)
+    async def get_async_session(
+            self,
+            async_session_maker: async_sessionmaker[AsyncSession],
+    ) -> AsyncIterable[AsyncSession]:
+        async with async_session_maker() as session:
+            yield session
+
+    @provide(scope=Scope.REQUEST)
+    def get_database_gateway(self, async_session: AsyncSession) -> DatabaseGateway:
+        return SqlaGateway(async_session)
+
+    @provide(scope=Scope.REQUEST)
+    def get_uow(self, async_session: AsyncSession) -> UoW:
+        return async_session
+
+
+def interactor_provider() -> Provider:
+    provider = Provider()
+
+    provider.provide(CreateUserInteractor, scope=Scope.REQUEST)
+    # provider.provide(DeleteUserInteractor, scope=Scope.REQUEST)
+    # provider.provide(GetUserInteractor, scope=Scope.REQUEST)
+    # provider.provide(AuthorizeInteractor, scope=Scope.REQUEST)
+
+    return provider
+
+
+def setup_interactors() -> list[Provider]:
+    providers = [
+        DBProvider(),
+        interactor_provider(),
+    ]
+    return providers
 
 
 def init_dependencies(app: FastAPI):
-    # start_mappers()
-
-    async_session_maker = create_async_session_maker()
-
-    app.dependency_overrides[Session] = partial(new_session, async_session_maker)
-    app.dependency_overrides[DatabaseGateway] = new_gateway
-    app.dependency_overrides[UoW] = new_uow
-
-    app.dependency_overrides[NewUser] = NewUser
-    all_depends(NewUser)
+    providers: list[Provider] = setup_interactors()
+    container: AsyncContainer = make_async_container(*providers)
+    setup_dishka(container, app)

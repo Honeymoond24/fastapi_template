@@ -14,7 +14,7 @@ async def new_user(
 
 
 # alternative implementation using classes
-class NewUser:
+class CreateUserInteractor:
     def __init__(
             self,
             database: DatabaseGateway,
